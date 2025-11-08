@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { DailyPlan, Task, Priority } from '../types';
 import { Icons } from './Icons';
@@ -63,9 +62,10 @@ const TaskItem: React.FC<{ task: Task; onToggle: (id: string) => void; onDelete:
 interface TodaysPlanProps {
     dailyPlans: DailyPlan[];
     setDailyPlans: React.Dispatch<React.SetStateAction<DailyPlan[]>>;
+    setStreak: (value: React.SetStateAction<number>) => void;
 }
 
-export const TodaysPlanView: React.FC<TodaysPlanProps> = ({ dailyPlans, setDailyPlans }) => {
+export const TodaysPlanView: React.FC<TodaysPlanProps> = ({ dailyPlans, setDailyPlans, setStreak }) => {
     const [newTaskText, setNewTaskText] = useState('');
     const todayStr = getLocalDateString(new Date());
     const todaysPlan = dailyPlans.find(p => p.date === todayStr);
@@ -97,6 +97,30 @@ export const TodaysPlanView: React.FC<TodaysPlanProps> = ({ dailyPlans, setDaily
     
     const handleToggleTask = (id: string) => {
         if (!todaysPlan) return;
+        const taskToToggle = todaysPlan.tasks.find(task => task.id === id);
+        if (!taskToToggle) return;
+    
+        // Only run streak logic when completing a task
+        if (!taskToToggle.completed) {
+            // Check if this is the first task being completed today
+            const isFirstCompletionToday = !todaysPlan.tasks.some(t => t.completed);
+            
+            if (isFirstCompletionToday) {
+                const yesterday = new Date();
+                yesterday.setDate(new Date().getDate() - 1);
+                const yesterdayStr = getLocalDateString(yesterday);
+    
+                const yesterdayPlan = dailyPlans.find(p => p.date === yesterdayStr);
+                const wasTaskCompletedYesterday = yesterdayPlan?.tasks.some(t => t.completed);
+    
+                if (wasTaskCompletedYesterday) {
+                    setStreak(prev => prev + 1);
+                } else {
+                    setStreak(1); // Start a new streak
+                }
+            }
+        }
+        
         const newTasks = todaysPlan.tasks.map(task => 
             task.id === id ? { ...task, completed: !task.completed, completedAt: task.completed ? undefined : Date.now() } : task
         );
@@ -190,7 +214,8 @@ export const TodaysPlanView: React.FC<TodaysPlanProps> = ({ dailyPlans, setDaily
                     </button>
                 </form>
             </div>
-             <style>{`
+             {/* FIX: Replaced inline style block with dangerouslySetInnerHTML to prevent TSX parsing errors. */}
+             <style dangerouslySetInnerHTML={{__html: `
                 @keyframes slide-in {
                   from { opacity: 0; transform: translateX(-10px); }
                   to { opacity: 1; transform: translateX(0); }
@@ -202,7 +227,7 @@ export const TodaysPlanView: React.FC<TodaysPlanProps> = ({ dailyPlans, setDaily
                   to { opacity: 0; transform: scale(0.95); max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; border-width: 0; }
                 }
                 .animate-fade-out-shrink { animation: fade-out-shrink 0.3s ease-in-out forwards; overflow: hidden; }
-            `}</style>
+            `}}/>
         </div>
     );
 };

@@ -99,32 +99,37 @@ const App: React.FC = () => {
   }, []);
 
 
-  // Effect for daily login, streak counting, and AI task generation
+  // Effect for daily login, streak checking, and AI task generation
   useEffect(() => {
     if (isLoading) return; // Don't run until data is loaded
-    
+    if (!user) return;
+
     const today = new Date();
     const todayStr = getLocalDateString(today);
-
-    if (!user) return;
-    if (lastLogin === todayStr) return;
-
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
     const yesterdayStr = getLocalDateString(yesterday);
+
+    // --- Streak Breaking Logic ---
+    // This logic runs on every load/data change to ensure streak is correct.
+    const lastCompletedDayPlan = [...dailyPlans]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .find(p => p.tasks.some(t => t.completed));
     
-    if (lastLogin === yesterdayStr) {
-      const yesterdayPlan = dailyPlans.find(p => p.date === yesterdayStr);
-      if (yesterdayPlan && yesterdayPlan.tasks.some(t => t.completed)) {
-        setStreak(prev => prev + 1);
-      } else {
-        setStreak(1);
+    if (lastCompletedDayPlan) {
+      const lastCompletedDate = lastCompletedDayPlan.date;
+      // If the last completion was before yesterday, the streak is broken.
+      if (lastCompletedDate < yesterdayStr) {
+        setStreak(0);
       }
-    } else if (lastLogin && lastLogin !== todayStr) {
-        setStreak(1);
-    } else if (!lastLogin) {
-        setStreak(1);
+    } else if (streak > 0) {
+      // Handles case where user might un-complete all tasks.
+      setStreak(0);
     }
+    
+    // --- Daily Task Generation Logic ---
+    // This should only run once per day.
+    if (lastLogin === todayStr) return;
     
     const generateTasksForToday = async () => {
         if (!goal) return;
@@ -138,19 +143,22 @@ const App: React.FC = () => {
         );
 
         const progressContext = { dayNumber, recentCompletedTasks };
-        const newTasksData = await geminiService.generateDailyTasks(goal, progressContext);
-
-        if (newTasksData && newTasksData.length > 0) {
-            const newTasks: Task[] = newTasksData.map(taskData => ({
-                id: crypto.randomUUID(),
-                text: taskData.text,
-                completed: false,
-                createdAt: Date.now(),
-                priority: taskData.priority,
-                category: taskData.category,
-            }));
-            const newPlan: DailyPlan = { date: todayStr, tasks: newTasks };
-            setDailyPlans(prev => [...prev.filter(p => p.date !== todayStr), newPlan]);
+        try {
+            const newTasksData = await geminiService.generateDailyTasks(goal, progressContext);
+            if (newTasksData && newTasksData.length > 0) {
+                const newTasks: Task[] = newTasksData.map(taskData => ({
+                    id: crypto.randomUUID(),
+                    text: taskData.text,
+                    completed: false,
+                    createdAt: Date.now(),
+                    priority: taskData.priority,
+                    category: taskData.category,
+                }));
+                const newPlan: DailyPlan = { date: todayStr, tasks: newTasks };
+                setDailyPlans(prev => [...prev.filter(p => p.date !== todayStr), newPlan]);
+            }
+        } catch(e) {
+            console.error("Failed to generate daily tasks", e);
         }
     };
 
@@ -183,7 +191,7 @@ const App: React.FC = () => {
       <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
         <div className={currentView === 'dashboard' ? 'block' : 'hidden'}><Dashboard user={user} streak={streak} dailyPlans={dailyPlans} goal={goal} focusSessions={focusSessions} /></div>
-        <div className={currentView === 'todaysPlan' ? 'block' : 'hidden'}><TodaysPlanView dailyPlans={dailyPlans} setDailyPlans={setDailyPlans} /></div>
+        <div className={currentView === 'todaysPlan' ? 'block' : 'hidden'}><TodaysPlanView dailyPlans={dailyPlans} setDailyPlans={setDailyPlans} setStreak={setStreak} /></div>
         <div className={currentView === 'goals' ? 'block' : 'hidden'}><GoalsView goal={goal} setGoal={setGoal} setDailyPlans={setDailyPlans} /></div>
         <div className={currentView === 'coach' ? 'block h-full' : 'hidden'}><CoachView dailyPlans={dailyPlans} history={coachHistory} setHistory={setCoachHistory} focusSessions={focusSessions} /></div>
         <div className={currentView === 'focus' ? 'block' : 'hidden'}><FocusView focusSessions={focusSessions} setFocusSessions={setFocusSessions} /></div>
