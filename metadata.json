@@ -1,0 +1,5 @@
+{
+  "name": "FocusFlow - ADHD Coach",
+  "description": "An AI-powered application designed to help individuals with ADHD manage tasks, maintain focus, and track progress. Features include a streak system, personalized AI coaching, daily summaries, monthly psychoprofiles, and focus sounds.",
+  "requestFramePermissions": []
+}
